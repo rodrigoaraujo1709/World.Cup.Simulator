@@ -1,43 +1,77 @@
+using Microsoft.EntityFrameworkCore;
+using World.Cup.Simulator;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddDbContext<WorldCupContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("ServerConnection")));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+app.MapGet("/teams/{id}", async (WorldCupContext context, Guid id) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    var team = await context.Teams.FindAsync(id);
 
-app.MapGet("/weatherforecast", () =>
+    return Results.Ok(team);
+});
+
+app.MapGet("/teams", async (WorldCupContext context) =>
 {
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateTime.Now.AddDays(index),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+    var teams = await context.Teams.ToListAsync();
+
+    return Results.Ok(teams);
+});
+
+app.MapPost("/teams", async (WorldCupContext context, Team team) =>
+{
+    await context.Teams.AddAsync(team);
+    await context.SaveChangesAsync();
+
+    return Results.Ok(team);
+});
+
+app.MapPut("/teams/{id}", async (WorldCupContext context, Team team) =>
+{
+    var dbTeam = await context.Teams.FindAsync(team.Id);
+    if (dbTeam == null)
+        return Results.NotFound();
+
+    dbTeam.Name = team.Name;
+    dbTeam.Img = team.Img;
+
+    context.Teams.Update(dbTeam);
+    await context.SaveChangesAsync();
+
+    return Results.Ok(dbTeam);
+
+
+});
+
+app.MapDelete("/teams", async (WorldCupContext context, Guid id) =>
+{
+    var dbTeam = await context.Teams.FindAsync(id);
+    if (dbTeam == null)
+        return Results.NotFound();
+
+    context.Teams.Remove(dbTeam);
+    await context.SaveChangesAsync();
+
+    return Results.NoContent();
+
+});
 
 app.Run();
 
-internal record WeatherForecast(DateTime Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+public class Team {
+
+    public Guid Id { get; set; }
+    public string Name { get; set; }
+    public string Img { get; set; }
+
 }
